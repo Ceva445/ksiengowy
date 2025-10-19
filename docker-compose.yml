@@ -1,0 +1,7 @@
+services:
+  ocr_api:
+    build: .
+    container_name: fastapi_ocr
+    ports:
+      - "8000:8000"
+    restart: always
