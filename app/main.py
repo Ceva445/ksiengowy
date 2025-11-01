@@ -18,7 +18,7 @@ async def extract_text_from_file(file_url: str = Form(...)):
         # Завантажуємо файл
         response = requests.get(file_url)
         if response.status_code != 200:
-            return {"error": "Не вдалося завантажити файл"}
+            return {"error": " - Не вдалося завантажити файл"}
 
         # Визначаємо тип файлу
         content_type = response.headers.get("Content-Type", "")
