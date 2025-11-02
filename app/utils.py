@@ -1,6 +1,6 @@
 import re
 
-def extract_invoice_data(text: str) -> dict:
+def extract_fv_invoice_data(text: str) -> dict:
     """Parses invoice text into JSON structure."""
 
     def find(pattern, text):
@@ -89,5 +89,104 @@ def extract_invoice_data(text: str) -> dict:
             "vat_value": m.group("vat_value"),
             "gross_value": m.group("gross_value")
         })
+
+    return data
+
+
+def extract_wz_data(text: str) -> dict:
+    """Parses 'Dokument Dostawy' (WZ) text into structured JSON."""
+
+    def find(pattern, text):
+        """Convenient wrapper for re.search - returns first group or ''. """
+        m = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+        if not m:
+            return ""
+        return (m.group(1) if m.lastindex else m.group(0)).strip()
+
+    # --- Main structure ---
+    data = {
+        "document_type": "DOKUMENT DOSTAWY",
+        "document_number": find(r"DOKUMENT\s+DOSTAWY\s*_?\s*(\d+)", text),
+        "order_number": "",  # will be filled below (improved search)
+        "client_number": find(r"Nr\s+Klienta\s+(\d+)", text),
+        "seller": {
+            "name": find(r"LYRECO\s+POLSKA\s+S\.A\.", text),
+            "address": find(r"ul\.\s+[^\n]+Komor[oó]w", text),
+            "nip": find(r"NIP\s*[:\-]?\s*(\d{3}[-\s]?\d{2}[-\s]?\d{2}[-\s]?\d{3})", text),
+            "bank": find(r"BNP\s+Paribas\s+Bank\s+Polska\s+SA", text),
+            "account_number": find(r"\b(\d{26})\b", text)
+        },
+        "buyer": {
+            "name": find(r"CEVA\s+LOGISTICS\s+POLAND\s+SP\s+Z\.?O\.?O\.?", text),
+            "address": find(r"UL\.?\s+DWORKOWA\s+[^\n]+", text),
+            "nip": find(r"NIP\s*[:\-]?\s*(\d{3}[-\s]?\d{2}[-\s]?\d{2}[-\s]?\d{3})", text)
+        },
+        "delivery": {
+            "address": find(r"UL\.?\s+ŁOWICKA\s+[^\n]+", text),
+            "contact_person": find(r"Pani\s+([A-ZŁŚĆŻŹa-ząćęłńóśźż\s]+)", text),
+            "phone": find(r"\+48\d{9,}", text)
+        },
+        "dates": {
+            "order_date": find(r"Data\s+Zam[oó]wienia\s+([\d]{4}[-/.]\d{2}[-/.]\d{2})", text),
+            "delivery_date": find(r"Data\s+Dostawy\s+([\d]{4}[-/.]\d{2}[-/.]\d{2})", text)
+        },
+        "representatives": {
+            "gop": {
+                "id": find(r"Przedstawiciel\s+GOP\s+(\d+)", text),
+                "name": find(r"Przedstawiciel\s+GOP\s+\d+\s+([A-ZŁŚĆŻŹa-ząćęłńóśźż\s\.]+)", text)
+            },
+            "nbs": {
+                "id": find(r"Przedstawiciel\s+NBS\s+(\d+)", text),
+                "name": find(r"Przedstawiciel\s+NBS\s+\d+\s+([A-ZŁŚĆŻŹa-ząćęłńóśźż\s\.]+)", text)
+            }
+        },
+        "reference_number": find(r"Nr\s+referencyjny\s+zam[oó]wienia\s+([A-Z0-9]+)", text),
+        "items": [],
+        "remarks": find(r"UWAGA:.*", text),
+        "uncleaned_text": text
+    }
+
+    # --- Improved order number detection ---
+    # Sometimes there are two mentions: short (9089956) and full (29089956)
+    order_match = re.search(r"Nr\s+Zam[oó]wienia\s*[:\-]?\s*(\d{7,10})", text, re.IGNORECASE)
+    if order_match:
+        data["order_number"] = order_match.group(1)
+    else:
+        # fallback - look for the last 8+ digit number in the text
+        long_nums = re.findall(r"\b\d{8,}\b", text)
+        if long_nums:
+            data["order_number"] = long_nums[-1]
+
+    # --- Items parsing ---
+    pattern = re.compile(
+        r"""
+        (?P<line>\d{1,3})            # line number (10, 20, 30)
+        [\s\)\|]*                    # spaces, parentheses or |
+        (?P<code>\d{2}\.\d{3}\.\d{3})# product code (20.483.639)
+        [^\S\n]+
+        (?P<qty_ordered>\d+)         # ordered quantity
+        [^\S\n]+
+        (?P<qty_delivered>\d+)       # delivered quantity
+        [^\S\n]+
+        (?P<desc>                    # description
+            (?:[^\n]*?)
+            (?=(?:\n\d{1,3}\s+\d{2}\.\d{3}\.\d{3})|$)
+        )
+        """,
+        re.VERBOSE | re.MULTILINE
+    )
+
+    items = []
+    for m in pattern.finditer(text):
+        desc = re.sub(r"[\|\$]+", "", m.group("desc"))
+        desc = re.sub(r"\s+", " ", desc).strip()
+        items.append({
+            "line_no": m.group("line"),
+            "product_code": m.group("code"),
+            "quantity_ordered": m.group("qty_ordered"),
+            "quantity_delivered": m.group("qty_delivered"),
+            "description": desc
+        })
+    data["items"] = items
 
     return data
