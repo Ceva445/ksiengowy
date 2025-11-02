@@ -1,0 +1,93 @@
+import re
+
+def extract_invoice_data(text: str) -> dict:
+    """Parses invoice text into JSON structure."""
+
+    def find(pattern, text):
+        """Finds first match for regex pattern."""
+        m = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+        if not m:
+            return ""
+        return (m.group(1) if m.lastindex else m.group(0)).strip()
+
+    # === Main JSON structure ===
+    data = {
+        "seller": {
+            "name": find(r"^LYRECO POLSKA S\.A\.", text),
+            "address": find(r"ul\.\s+([^\n]+Komorów)", text),
+            "nip": "",
+            "bank": find(r"BNP\s+Paribas\s+Bank\s+Polska\s+SA", text),
+            "account_number": find(r"(\d{26})", text),
+            "bdo": find(r"BDO[:\s]+(\d+)", text)
+        },
+        "buyer": {
+            "name": find(r"CEVA\s+LOGISTICS\s+POLAND\s+SP\s+Z\.?O\.?O\.?", text),
+            "address": find(r"UL\.?\s+DWORKOWA\s+[^\n]+", text),
+            "nip": ""
+        },
+        "recipient": {
+            "name": find(r"Odbiorca\s+([A-Z0-9\s\.\-]+)", text),
+            "address": find(r"Odbiorca[^\n]*\n([A-Z0-9\s\.\-]+)", text)
+        },
+        "invoice": {
+            "number": find(r"Potwierdzenie\s+zamówienia\s+(\d+)", text),
+            "issue_date": find(r"Data\s+wystawienia\s+([\d/]+)", text),
+            "sale_date": find(r"Data\s+sprzedaży\s*[:\-]?\s*([\d/]+)", text),
+            "payment_method": find(r"Sposób\s+płatności\s*[:\-]?\s*([^\n]+)", text)
+        },
+        "items": [],
+        "uncleaned_text": text
+    }
+
+    # === NIP numbers ===
+    # Seller (LYRECO)
+    seller_nip_pattern = re.compile(
+        r"NIP\s*[:\-]?\s*(\d{3}[-\s]?\d{2}[-\s]?\d{2}[-\s]?\d{3})",
+        re.IGNORECASE
+    )
+    seller_nip_match = seller_nip_pattern.search(text)
+    if seller_nip_match:
+        data["seller"]["nip"] = seller_nip_match.group(1)
+
+    # Buyer (CEVA)
+    buyer_nip_pattern = re.compile(
+        r"(?:Nr\s*klienta.*?NIP\s*[:\-]?\s*(\d{3}[-\s]?\d{2}[-\s]?\d{2}[-\s]?\d{3}))|"
+        r"(?:Nabywca.*?NIP\s*[:\-]?\s*(\d{3}[-\s]?\d{2}[-\s]?\d{2}[-\s]?\d{3}))",
+        re.IGNORECASE | re.DOTALL
+    )
+    buyer_nip_match = buyer_nip_pattern.search(text)
+    if buyer_nip_match:
+        nip_val = buyer_nip_match.group(1) or buyer_nip_match.group(2)
+        data["buyer"]["nip"] = nip_val
+
+    # === Products table ===
+    item_pattern = re.compile(
+        r"""
+        (?P<code>\d{2}\.\d{3}\.\d{3})          # product code (e.g. 20.483.639)
+        [^\S\n]*                               # whitespace excluding \n
+        (?P<desc>.+?)                          # product description (non-greedy capture)
+        \s+(?P<qty>\d+)\s*\|?\s*               # quantity
+        (?P<unit>[A-ZŁ]+)\s+                   # unit (SZT)
+        (?P<price_net>[\d,]+)\s+               # net price
+        (?P<value_net>[\d,]+)\s*\|\s*          # net value
+        (?P<vat_rate>[\d,]+%)\s+               # VAT rate
+        (?P<vat_value>[\d,]+)\s+               # VAT amount
+        (?P<gross_value>[\d,]+)                # gross value
+        """,
+        re.VERBOSE | re.MULTILINE
+    )
+
+    for m in item_pattern.finditer(text):
+        data["items"].append({
+            "product_code": m.group("code"),
+            "description": m.group("desc").strip(),
+            "quantity": m.group("qty"),
+            "unit": m.group("unit"),
+            "price_net": m.group("price_net"),
+            "value_net": m.group("value_net"),
+            "vat_rate": m.group("vat_rate"),
+            "vat_value": m.group("vat_value"),
+            "gross_value": m.group("gross_value")
+        })
+
+    return data
