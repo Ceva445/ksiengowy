@@ -14,7 +14,8 @@ PROJECT_DIR="${HOME_DIR}/Desktop/ksiengowy"
 WIFI_FILE="${PROJECT_DIR}/wifi_cred.txt"
 MIRROR_URL_FILE="${PROJECT_DIR}/mirror_url.txt"
 VENV_DIR="${PROJECT_DIR}/ksiengowy_env"
-UVICORN_CMD="uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+
+UVICORN_CMD="cd ${PROJECT_DIR} && source ${VENV_DIR}/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 NGROK_CMD="ngrok http 8000"
 
 # Function to detect available terminal
@@ -306,7 +307,7 @@ if [[ "$TERMINAL_TYPE" == "none" ]]; then
 fi
 
 # FastAPI command
-FASTAPI_COMMAND="echo 'Activating virtual environment...'; source '${VENV_DIR}/bin/activate'; echo 'Starting FastAPI server...'; ${UVICORN_CMD}; echo 'Server stopped. Press Enter to close...'; read"
+FASTAPI_COMMAND="echo 'Activating virtual environment...'; source '${VENV_DIR}/bin/activate'; echo 'Changing to project directory...'; cd '${PROJECT_DIR}'; echo 'Starting FastAPI server...'; uvicorn app.main:app --reload --host 0.0.0.0 --port 8000; echo 'Server stopped. Press Enter to close...'; read"
 
 # ngrok command with monitoring
 NGROK_COMMAND="echo 'Starting ngrok for port 8000 tunneling...'; ${NGROK_CMD}; echo 'Ngrok stopped. Press Enter to close...'; read"
