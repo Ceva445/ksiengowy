@@ -307,7 +307,7 @@ if [[ "$TERMINAL_TYPE" == "none" ]]; then
 fi
 
 # FastAPI command
-FASTAPI_COMMAND="echo 'Activating virtual environment...'; source '${VENV_DIR}/bin/activate'; echo 'Changing to project directory...'; cd '${PROJECT_DIR}'; echo 'Starting FastAPI server...'; uvicorn app.main:app --reload --host 0.0.0.0 --port 8000; echo 'Server stopped. Press Enter to close...'; read"
+FASTAPI_COMMAND="echo 'Activating virtual environment...'; source '${VENV_DIR}/bin/activate'; echo 'Changing to project directory...'; cd '${PROJECT_DIR}/app'; echo 'Starting FastAPI server...'; uvicorn main:app --reload --host 0.0.0.0 --port 8000; echo 'Server stopped. Press Enter to close...'; read"
 
 # ngrok command with monitoring
 NGROK_COMMAND="echo 'Starting ngrok for port 8000 tunneling...'; ${NGROK_CMD}; echo 'Ngrok stopped. Press Enter to close...'; read"
