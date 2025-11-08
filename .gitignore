@@ -62,3 +62,6 @@ Thumbs.db
 *.pid
 instance/
 .webassets-cache
+wifi_cred.txt
+mirror_url.txt
+ngrock_token
