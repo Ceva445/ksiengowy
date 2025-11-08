@@ -14,7 +14,7 @@ PROJECT_DIR="${HOME_DIR}/Desktop/ksiengowy"
 WIFI_FILE="${PROJECT_DIR}/wifi_cred.txt"
 MIRROR_URL_FILE="${PROJECT_DIR}/mirror_url.txt"
 VENV_DIR="${PROJECT_DIR}/ksiengowy_env"
-UVICORN_CMD="uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+UVICORN_CMD="uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 NGROK_CMD="ngrok http 8000"
 
 # Function to detect available terminal
