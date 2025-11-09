@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
+sleep 120
 # ----------------------------------------
 # Graphical environment configuration
 export DISPLAY=:0
@@ -297,6 +297,24 @@ done
 echo "Successfully connected to Wi-Fi and obtained IP address!"
 sleep 3
 
+# Update project and install dependencies
+echo "Updating project from Git repository..."
+cd "${PROJECT_DIR}"
+if git pull; then
+    echo "Git pull completed successfully"
+    
+    echo "Installing/updating Python dependencies..."
+    source "${VENV_DIR}/bin/activate"
+    if pip3 install -r requirements.txt; then
+        echo "Dependencies installed successfully"
+    else
+        echo "Warning: Failed to install dependencies from requirements.txt"
+    fi
+    deactivate
+else
+    echo "Warning: Git pull failed, continuing with existing code"
+fi
+
 # Detect available terminal
 TERMINAL_TYPE=$(detect_terminal)
 echo "Using terminal: $TERMINAL_TYPE"
@@ -306,8 +324,8 @@ if [[ "$TERMINAL_TYPE" == "none" ]]; then
     exit 1
 fi
 
-# FastAPI command
-FASTAPI_COMMAND="echo 'Activating virtual environment...'; source '${VENV_DIR}/bin/activate'; echo 'Changing to project directory...'; cd '${PROJECT_DIR}/app'; echo 'Starting FastAPI server...'; uvicorn main:app --reload --host 0.0.0.0 --port 8000; echo 'Server stopped. Press Enter to close...'; read"
+# FastAPI command with git pull and pip install
+FASTAPI_COMMAND="echo 'Activating virtual environment...'; source '${VENV_DIR}/bin/activate'; echo 'Changing to project directory...'; cd '${PROJECT_DIR}'; echo 'Updating project from Git...'; git pull; echo 'Installing dependencies...'; pip3 install -r requirements.txt; echo 'Starting FastAPI server...'; cd app; uvicorn main:app --reload --host 0.0.0.0 --port 8000; echo 'Server stopped. Press Enter to close...'; read"
 
 # ngrok command with monitoring
 NGROK_COMMAND="echo 'Starting ngrok for port 8000 tunneling...'; ${NGROK_CMD}; echo 'Ngrok stopped. Press Enter to close...'; read"
