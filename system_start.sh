@@ -339,7 +339,7 @@ fi
 
 # Delay before starting ngrok
 echo "Waiting for FastAPI server to start..."
-sleep 10
+sleep 20
 
 # Launch ngrok in terminal
 echo "Starting ngrok..."
