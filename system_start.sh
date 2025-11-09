@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-sleep 120
+sleep 60
 # ----------------------------------------
 # Graphical environment configuration
 export DISPLAY=:0
