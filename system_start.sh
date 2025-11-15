@@ -109,7 +109,7 @@ send_ngrok_url() {
     # Send POST request with URL
     local response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
-        -d "{\"ngrok_url\": \"$ngrok_url\", \"timestamp\": \"$(date -Iseconds)\", \"project\": \"ksiengowy\"}" \
+        -d "{\"ngrok_url\": \"$ngrok_url\"}" \
         "$mirror_url")
     
     local http_code=$(echo "$response" | tail -n1)
