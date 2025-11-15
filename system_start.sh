@@ -43,24 +43,23 @@ detect_terminal() {
 get_ngrok_url() {
     local max_attempts=30
     local attempt=1
-    
-    echo "Waiting for ngrok URL..."
-    
+
+    echo "Waiting for ngrok URL..." >&2
+
     while [ $attempt -le $max_attempts ]; do
-        # Attempt to get URL via ngrok API
         local ngrok_url=$(curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | grep -o 'https://[^"]*\.ngrok-free\.dev' | head -1)
-        
+
         if [ -n "$ngrok_url" ]; then
             echo "$ngrok_url"
             return 0
         fi
-        
-        echo "Attempt $attempt/$max_attempts: ngrok URL not yet available..."
+
+        echo "Attempt $attempt/$max_attempts: ngrok URL not yet available..." >&2
         sleep 2
         attempt=$((attempt + 1))
     done
-    
-    echo "Failed to get ngrok URL within $max_attempts attempts"
+
+    echo "Failed to get ngrok URL within $max_attempts attempts" >&2
     return 1
 }
 
