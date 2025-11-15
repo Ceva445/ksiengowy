@@ -107,10 +107,10 @@ send_ngrok_url() {
     echo "To address: $mirror_url"
     
     # Send POST request with URL
-    local json_data=$(jq -n --arg url "$ngrok_url" '{"ngrok_url": $url}')
+    local escaped_url=$(printf '%s' "$ngrok_url" | sed 's/"/\\"/g')
     local response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
-        -d "$json_data" \
+        -d "{\"ngrok_url\": \"$escaped_url\"}" \
         "$mirror_url")
     
     local http_code=$(echo "$response" | tail -n1)
