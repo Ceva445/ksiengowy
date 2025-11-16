@@ -68,7 +68,7 @@ def extract_fv_invoice_data(text: str) -> dict:
         (?P<desc>.+?)                          # product description (non-greedy capture)
         \s+(?P<qty>\d+)\s*\|?\s*               # quantity
         (?P<unit>[A-ZŁ]+)\s+                   # unit (SZT)
-        (?P<price_net>[\d,]+)\s+               # net price
+        (?P<price_net>[\d,]+)\s+               # unit price
         (?P<value_net>[\d,]+)\s*\|\s*          # net value
         (?P<vat_rate>[\d,]+%)\s+               # VAT rate
         (?P<vat_value>[\d,]+)\s+               # VAT amount
@@ -79,11 +79,11 @@ def extract_fv_invoice_data(text: str) -> dict:
 
     for m in item_pattern.finditer(text):
         data["items"].append({
-            "product_code": m.group("code"),
-            "description": m.group("desc").strip(),
+            "code": m.group("code"),
+            "name": m.group("desc").strip(),
             "quantity": m.group("qty"),
             "unit": m.group("unit"),
-            "price_net": m.group("price_net"),
+            "unit_price": m.group("price_net"),
             "value_net": m.group("value_net"),
             "vat_rate": m.group("vat_rate"),
             "vat_value": m.group("vat_value"),
@@ -182,10 +182,10 @@ def extract_wz_data(text: str) -> dict:
         desc = re.sub(r"\s+", " ", desc).strip()
         items.append({
             "line_no": m.group("line"),
-            "product_code": m.group("code"),
+            "code": m.group("code"),
             "quantity_ordered": m.group("qty_ordered"),
             "quantity_delivered": m.group("qty_delivered"),
-            "description": desc
+            "name": desc
         })
     data["items"] = items
 
