@@ -13,9 +13,7 @@ HOME_DIR="${HOME}"
 PROJECT_DIR="${HOME_DIR}/Desktop/ksiengowy"
 WIFI_FILE="${PROJECT_DIR}/wifi_cred.txt"
 MIRROR_URL_FILE="${PROJECT_DIR}/mirror_url.txt"
-VENV_DIR="${PROJECT_DIR}/ksiengowy_env"
 
-UVICORN_CMD="cd ${PROJECT_DIR} && source ${VENV_DIR}/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 NGROK_CMD="ngrok http 8000"
 
 # Function to detect available terminal
@@ -66,7 +64,12 @@ get_ngrok_url() {
 # Function to get URL from mirror_url.txt file
 get_mirror_url() {
     if [[ ! -f "${MIRROR_URL_FILE}" ]]; then
-        echo "Error: file ${MIRROR_URL_FILE} not found." >&2
+        echo "WARNING: file ${MIRROR_URL_FILE} not found."
+        echo "Creating template file..."
+        cat > "${MIRROR_URL_FILE}" << EOF
+
+EOF
+        echo "Created file ${MIRROR_URL_FILE}. Please edit it and add your URL."
         return 1
     fi
     
@@ -77,7 +80,6 @@ get_mirror_url() {
         return 1
     fi
     
-    # Check if URL starts with http:// or https://
     if [[ ! "$mirror_url" =~ ^https?:// ]]; then
         echo "Error: URL in file ${MIRROR_URL_FILE} must start with http:// or https://" >&2
         return 1
@@ -207,20 +209,6 @@ if [[ ! -d "${PROJECT_DIR}" ]]; then
   echo "Error: project folder ${PROJECT_DIR} not found." >&2
   exit 1
 fi
-if [[ ! -d "${VENV_DIR}" ]]; then
-  echo "Error: virtual environment ${VENV_DIR} not found." >&2
-  exit 1
-fi
-
-# Check for mirror_url.txt file
-if [[ ! -f "${MIRROR_URL_FILE}" ]]; then
-    echo "WARNING: file ${MIRROR_URL_FILE} not found."
-    echo "Creating template file..."
-    cat > "${MIRROR_URL_FILE}" << EOF
-
-EOF
-    echo "Created file ${MIRROR_URL_FILE}. Please edit it and add your URL."
-fi
 
 # Read SSID and password
 mapfile -t _lines < "${WIFI_FILE}"
@@ -297,20 +285,11 @@ done
 echo "Successfully connected to Wi-Fi and obtained IP address!"
 sleep 3
 
-# Update project and install dependencies
+# Update project repository (logs preserved)
 echo "Updating project from Git repository..."
 cd "${PROJECT_DIR}"
 if git pull; then
     echo "Git pull completed successfully"
-    
-    echo "Installing/updating Python dependencies..."
-    source "${VENV_DIR}/bin/activate"
-    if pip3 install -r requirements.txt; then
-        echo "Dependencies installed successfully"
-    else
-        echo "Warning: Failed to install dependencies from requirements.txt"
-    fi
-    deactivate
 else
     echo "Warning: Git pull failed, continuing with existing code"
 fi
@@ -324,22 +303,32 @@ if [[ "$TERMINAL_TYPE" == "none" ]]; then
     exit 1
 fi
 
-# FastAPI command with git pull and pip install
-FASTAPI_COMMAND="echo 'Activating virtual environment...'; source '${VENV_DIR}/bin/activate'; echo 'Changing to project directory...'; cd '${PROJECT_DIR}'; echo 'Updating project from Git...'; git pull; echo 'Installing dependencies...'; pip3 install -r requirements.txt; echo 'Starting FastAPI server...'; cd app; uvicorn main:app --reload --host 0.0.0.0 --port 8000; echo 'Server stopped. Press Enter to close...'; read"
+# NEW: FastAPI via Docker Compose
+FASTAPI_COMMAND="echo 'Starting Docker Compose...'; docker compose up --build; echo 'Server stopped. Press Enter to close...'; read"
 
-# ngrok command with monitoring
+# ngrok command unchanged
 NGROK_COMMAND="echo 'Starting ngrok for port 8000 tunneling...'; ${NGROK_CMD}; echo 'Ngrok stopped. Press Enter to close...'; read"
 
-# Launch FastAPI in terminal
-echo "Starting FastAPI project..."
+# Launch FastAPI (Docker Compose) in terminal
+echo "Starting FastAPI project (Docker Compose)..."
 if ! run_in_terminal "FastAPI Server" "$FASTAPI_COMMAND" "$PROJECT_DIR"; then
     echo "Failed to launch FastAPI in terminal"
     exit 1
 fi
 
-# Delay before starting ngrok
+# NEW: Wait for FastAPI to be ready on port 8000
 echo "Waiting for FastAPI server to start..."
-sleep 20
+TIMEOUT=60
+EL=0
+while ! nc -z localhost 8000; do
+    sleep 1
+    EL=$((EL+1))
+    if [ $EL -ge $TIMEOUT ]; then
+        echo "Timeout waiting for FastAPI to start."
+        exit 1
+    fi
+done
+echo "FastAPI is ready!"
 
 # Launch ngrok in terminal
 echo "Starting ngrok..."
@@ -347,6 +336,7 @@ if ! run_in_terminal "Ngrok Tunnel" "$NGROK_COMMAND" ""; then
     echo "Failed to launch ngrok in terminal"
     exit 1
 fi
+
 
 # Wait and get ngrok URL
 echo "Waiting for ngrok initialization..."
@@ -376,12 +366,10 @@ fi
 
 echo "=================================================="
 echo "SUCCESSFULLY LAUNCHED!"
-echo "FastAPI server: http://localhost:8000"
 if [ -n "$NGROK_URL" ]; then
     echo "Ngrok URL: $NGROK_URL"
 fi
-if [ -n "$MIRROR_URL" ]; then
+if [ -n "${MIRROR_URL-}" ]; then
     echo "Mirror URL: $MIRROR_URL"
 fi
-echo "API documentation: http://localhost:8000/docs"
 echo "=================================================="
