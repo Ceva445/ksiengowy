@@ -102,6 +102,7 @@ def extract_fv_invoice_data(text: str) -> dict:
             "order_number": find(r"Zamówienie\s+Nr\s+(\d+)", text)
         },
         "items": [],
+        "total_items": 0,
         "uncleaned_text": text
     }
 
@@ -129,16 +130,17 @@ def extract_fv_invoice_data(text: str) -> dict:
     # === Products table ===
     item_pattern = re.compile(
         r"""
-        (?P<code>\d{2}\.\d{3}\.\d{3})          # product code (e.g. 20.483.639)
-        [^\S\n]*                               # whitespace excluding \n
-        (?P<desc>.+?)                          # product description (non-greedy capture)
-        \s+(?P<qty>\d+)\s*\|?\s*               # quantity
-        (?P<unit>[A-ZŁ]+)\s+                   # unit (SZT)
-        (?P<price_net>[\d,]+)\s+               # unit price
-        (?P<value_net>[\d,]+)\s*\|\s*          # net value
-        (?P<vat_rate>[\d,]+%)\s+               # VAT rate
-        (?P<vat_value>[\d,]+)\s+               # VAT amount
-        (?P<gross_value>[\d,]+)                # gross value
+        (?:^|\|\s*)?                               # optional prefix like "h |"
+        (?P<code>\d{2}\.\d{3}\.\d{3})               # product code
+        \s+
+        (?P<desc>.+?)                              # description
+        \s+(?P<qty>\d+)\s*\|\s*                    # quantity
+        (?P<unit>[A-ZŁ]+)\s+                       # unit
+        (?P<price_net>[\d\.,]+)\s+                 # unit price
+        (?P<value_net>[\d\.,]+)\s*\|\s*            # net value
+        (?P<vat_rate>[\d\.,]+%)\s+                 # VAT rate
+        (?P<vat_value>[\d\.,]+)\s+                 # VAT value
+        (?P<gross_value>[\d\.,]+)                  # gross value
         """,
         re.VERBOSE | re.MULTILINE
     )
@@ -155,7 +157,7 @@ def extract_fv_invoice_data(text: str) -> dict:
             "vat_value": m.group("vat_value"),
             "gross_value": m.group("gross_value")
         })
-
+    data["total_items"] = len(data["items"])
     return data
 
 
