@@ -1,5 +1,70 @@
 import re
 
+
+def extract_table_rows(text: str) -> list[dict]:
+    rows = []
+
+    row_re = re.compile(
+        r"""
+        ^\s*
+        (?P<line>\d{1,4})\s+
+        (?P<code>\d{2}\.\d{3}\.?\s*\d{3})\s+
+        (?P<qty_ordered>[\dIl§!s]+)
+        (?:\s+(?P<qty_delivered>[\dIl§!s]+))?
+        """,
+        re.VERBOSE
+    )
+
+    stop_re = re.compile(
+        r"do\s+dostawy\s+w\s+najbliższym\s+okresie",
+        re.IGNORECASE
+    )
+
+    ignore_items = False
+
+    for line in text.splitlines():
+        if stop_re.search(line):
+            ignore_items = True
+            continue
+
+        if ignore_items:
+            continue
+
+        m = row_re.match(line)
+        if not m:
+            continue
+
+        qty_ordered = normalize_qty(m.group("qty_ordered"))
+        qty_delivered = normalize_qty(
+            m.group("qty_delivered") or qty_ordered
+        )
+
+        rows.append({
+            "code": normalize_code(m.group("code")),
+            "quantity_ordered": qty_ordered,
+            "quantity_delivered": qty_delivered,
+        })
+    return rows
+
+def find(pattern, text):
+    m = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+    if not m:
+        return ""
+    if m.lastindex:
+        return m.group(1).strip()
+    return m.group(0).strip()
+
+def normalize_qty(val: str) -> str:
+    """Fix OCR mistakes: l / I -> 1"""
+    return val.replace("I", "1").replace("l", "1")
+
+
+def normalize_code(code: str) -> str:
+    """Remove OCR spaces inside product code"""
+    return code.replace(" ", "")
+
+
+
 def extract_fv_invoice_data(text: str) -> dict:
     """Parses invoice text into JSON structure."""
 
@@ -33,7 +98,8 @@ def extract_fv_invoice_data(text: str) -> dict:
             "number": find(r"Potwierdzenie\s+zamówienia\s+(\d+)", text),
             "issue_date": find(r"Data\s+wystawienia\s+([\d/]+)", text),
             "sale_date": find(r"Data\s+sprzedaży\s*[:\-]?\s*([\d/]+)", text),
-            "payment_method": find(r"Sposób\s+płatności\s*[:\-]?\s*([^\n]+)", text)
+            "payment_method": find(r"Sposób\s+płatności\s*[:\-]?\s*([^\n]+)", text),
+            "order_number": find(r"Zamówienie\s+Nr\s+(\d+)", text)
         },
         "items": [],
         "uncleaned_text": text
@@ -94,99 +160,32 @@ def extract_fv_invoice_data(text: str) -> dict:
 
 
 def extract_wz_data(text: str) -> dict:
-    """Parses 'Dokument Dostawy' (WZ) text into structured JSON."""
+    rows = extract_table_rows(text)
 
-    def find(pattern, text):
-        """Convenient wrapper for re.search - returns first group or ''. """
-        m = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
-        if not m:
-            return ""
-        return (m.group(1) if m.lastindex else m.group(0)).strip()
+    items = []
+    for i, row in enumerate(rows):
+        items.append({**row})
 
-    # --- Main structure ---
     data = {
         "document_type": "DOKUMENT DOSTAWY",
-        "document_number": find(r"DOKUMENT\s+DOSTAWY\s*_?\s*(\d+)", text),
-        "order_number": "",  # will be filled below (improved search)
-        "client_number": find(r"Nr\s+Klienta\s+(\d+)", text),
+        "document_number": find(r"DOKUMENT\s+DOSTAWY\s+(\d+)", text),
+        "order_number": find(r"Nr\s+Zam[oó]wienia\s*[:\-]?\s*(\d+)", text),
+        "client_number": find(r"Nr\s+Klient[a-z]*\s+(\d+)", text),
         "seller": {
             "name": find(r"LYRECO\s+POLSKA\s+S\.A\.", text),
             "address": find(r"ul\.\s+[^\n]+Komor[oó]w", text),
-            "nip": find(r"NIP\s*[:\-]?\s*(\d{3}[-\s]?\d{2}[-\s]?\d{2}[-\s]?\d{3})", text),
+            "nip": find(r"NIP\s*[:\-]?\s*(\d{3}[-\s]\d{2}[-\s]\d{2}[-\s]\d{3})", text),
             "bank": find(r"BNP\s+Paribas\s+Bank\s+Polska\s+SA", text),
-            "account_number": find(r"\b(\d{26})\b", text)
+            "account_number": find(r"\b(\d{26})\b", text),
         },
-        "buyer": {
-            "name": find(r"CEVA\s+LOGISTICS\s+POLAND\s+SP\s+Z\.?O\.?O\.?", text),
-            "address": find(r"UL\.?\s+DWORKOWA\s+[^\n]+", text),
-            "nip": find(r"NIP\s*[:\-]?\s*(\d{3}[-\s]?\d{2}[-\s]?\d{2}[-\s]?\d{3})", text)
-        },
-        "delivery": {
-            "address": find(r"UL\.?\s+ŁOWICKA\s+[^\n]+", text),
-            "contact_person": find(r"Pani\s+([A-ZŁŚĆŻŹa-ząćęłńóśźż\s]+)", text),
-            "phone": find(r"\+48\d{9,}", text)
-        },
+        
         "dates": {
-            "order_date": find(r"Data\s+Zam[oó]wienia\s+([\d]{4}[-/.]\d{2}[-/.]\d{2})", text),
-            "delivery_date": find(r"Data\s+Dostawy\s+([\d]{4}[-/.]\d{2}[-/.]\d{2})", text)
+            "delivery_date": find(r"Data\s+Dostawy\s+(\d{2}\.\d{2}\.\d{4})", text),
+            "order_date": find(r"Data\s+Zam[oó]wienia\s+(\d{2}\.\d{2}\.\d{4})", text),
         },
-        "representatives": {
-            "gop": {
-                "id": find(r"Przedstawiciel\s+GOP\s+(\d+)", text),
-                "name": find(r"Przedstawiciel\s+GOP\s+\d+\s+([A-ZŁŚĆŻŹa-ząćęłńóśźż\s\.]+)", text)
-            },
-            "nbs": {
-                "id": find(r"Przedstawiciel\s+NBS\s+(\d+)", text),
-                "name": find(r"Przedstawiciel\s+NBS\s+\d+\s+([A-ZŁŚĆŻŹa-ząćęłńóśźż\s\.]+)", text)
-            }
-        },
-        "reference_number": find(r"Nr\s+referencyjny\s+zam[oó]wienia\s+([A-Z0-9]+)", text),
-        "items": [],
+       
+        "items": items,
         "remarks": find(r"UWAGA:.*", text),
-        "uncleaned_text": text
+        "uncleaned_text": text,
     }
-
-    # --- Improved order number detection ---
-    # Sometimes there are two mentions: short (9089956) and full (29089956)
-    order_match = re.search(r"Nr\s+Zam[oó]wienia\s*[:\-]?\s*(\d{7,10})", text, re.IGNORECASE)
-    if order_match:
-        data["order_number"] = order_match.group(1)
-    else:
-        # fallback - look for the last 8+ digit number in the text
-        long_nums = re.findall(r"\b\d{8,}\b", text)
-        if long_nums:
-            data["order_number"] = long_nums[-1]
-
-    # --- Items parsing ---
-    pattern = re.compile(
-        r"""
-        (?P<line>\d{1,3})            # line number (10, 20, 30)
-        [\s\)\|]*                    # spaces, parentheses or |
-        (?P<code>\d{2}\.\d{3}\.\d{3})# product code (20.483.639)
-        [^\S\n]+
-        (?P<qty_ordered>\d+)         # ordered quantity
-        [^\S\n]+
-        (?P<qty_delivered>\d+)       # delivered quantity
-        [^\S\n]+
-        (?P<desc>                    # description
-            (?:[^\n]*?)
-            (?=(?:\n\d{1,3}\s+\d{2}\.\d{3}\.\d{3})|$)
-        )
-        """,
-        re.VERBOSE | re.MULTILINE
-    )
-
-    items = []
-    for m in pattern.finditer(text):
-        desc = re.sub(r"[\|\$]+", "", m.group("desc"))
-        desc = re.sub(r"\s+", " ", desc).strip()
-        items.append({
-            "line_no": m.group("line"),
-            "code": m.group("code"),
-            "quantity_ordered": m.group("qty_ordered"),
-            "quantity_delivered": m.group("qty_delivered"),
-            "name": desc
-        })
-    data["items"] = items
-
     return data
