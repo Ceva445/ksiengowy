@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI, BackgroundTasks
 from pydantic import BaseModel
 from image_tools import process_document_from_url
@@ -132,14 +134,33 @@ async def send_emails(payloads: list[EmailPayload]):
 async def fetch_and_send():
     print(f"Job started at {datetime.now()}")
 
+    max_retries = 3
+    attempt = 0
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            # 1. отримуємо дані з Render
-            response = await client.post(RENDER_ENDPOINT)
+            while attempt <= max_retries:
+                response = await client.post(RENDER_ENDPOINT)
 
-            if response.status_code != 200:
-                print("Render error:", response.text)
-                return
+                # якщо 500 — пробуємо ще
+                if response.status_code == 500:
+                    attempt += 1
+                    print(f"Attempt {attempt}: Server error 500, retrying...")
+
+                    if attempt > max_retries:
+                        print("Max retries exceeded")
+                        return
+
+                    await asyncio.sleep(2)  # невелика пауза перед повтором
+                    continue
+
+                # інші помилки
+                if response.status_code != 200:
+                    print("Render error:", response.text)
+                    return
+
+                # якщо успішно — виходимо з циклу
+                break
 
             data = response.json()
             notifications = data.get("notifications", [])
@@ -148,7 +169,6 @@ async def fetch_and_send():
                 print("No emails to send")
                 return
 
-            # 2. відправляємо email локально
             await send_emails([
                 EmailPayload(**item) for item in notifications
             ])
@@ -157,8 +177,6 @@ async def fetch_and_send():
 
     except Exception as e:
         print("Scheduler error:", e)
-
-
 # =========================
 # 🔹 SCHEDULER START
 # =========================
@@ -169,9 +187,11 @@ async def start_scheduler():
 
     # Пн-Пт 08:00
     scheduler.add_job(fetch_and_send, "cron", day_of_week="mon-fri", hour=8, minute=0)
+    scheduler.add_job(fetch_and_send, "cron", day_of_week="mon-fri", hour=9, minute=54)
 
     # Пн-Пт 22:30
     scheduler.add_job(fetch_and_send, "cron", day_of_week="mon-fri", hour=22, minute=30)
+
 
     # Субота 16:00
     scheduler.add_job(fetch_and_send, "cron", day_of_week="sat", hour=16, minute=0)
