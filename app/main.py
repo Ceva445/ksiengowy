@@ -187,7 +187,6 @@ async def start_scheduler():
 
     # Пн-Пт 08:00
     scheduler.add_job(fetch_and_send, "cron", day_of_week="mon-fri", hour=8, minute=0)
-    scheduler.add_job(fetch_and_send, "cron", day_of_week="mon-fri", hour=9, minute=54)
 
     # Пн-Пт 22:30
     scheduler.add_job(fetch_and_send, "cron", day_of_week="mon-fri", hour=22, minute=30)
